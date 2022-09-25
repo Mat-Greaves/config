@@ -39,6 +39,8 @@ func MustLoadFromEnvironment[T any, PtrT *T](pt PtrT, prefix string) {
 	}
 }
 
+// loadRecursive walks an input value until we reach a leaf node, accumulating environment
+// key path fragments along the way.
 func loadRecursive(val reflect.Value, environmentKey string) error {
 	if val.Kind() == reflect.Struct {
 		for i := 0; i < val.NumField(); i++ {
