@@ -7,15 +7,15 @@ import (
 	"testing"
 )
 
-func Test_ParseFromEnvironment(t *testing.T) {
-	t.Run("input with default values", func(t *testing.T) {
+func Test_LoadFromEnvironment(t *testing.T) {
+	t.Run("struct input with default values", func(t *testing.T) {
 		d := "some default value"
 		config := struct {
 			foo string
 		}{
 			foo: d,
 		}
-		err := ParseFromEnvironment(&config)
+		err := LoadFromEnvironment(&config, "")
 		if err != nil {
 			t.Error(err)
 		}
@@ -24,12 +24,12 @@ func Test_ParseFromEnvironment(t *testing.T) {
 		}
 	})
 
-	t.Run("input has int field", func(t *testing.T) {
+	t.Run("struct input has int field", func(t *testing.T) {
 		config := struct{ Foo int }{}
 		val := 1
 		os.Setenv("FOO", strconv.Itoa(val))
 		defer os.Clearenv()
-		err := ParseFromEnvironment(&config)
+		err := LoadFromEnvironment(&config, "")
 		if err != nil {
 			t.Error(err)
 		}
@@ -38,39 +38,12 @@ func Test_ParseFromEnvironment(t *testing.T) {
 		}
 	})
 
-	t.Run("input has bool", func(t *testing.T) {
-		config := struct{ Foo bool }{}
-		val := true
-		os.Setenv("FOO", strconv.FormatBool(val))
-		defer os.Clearenv()
-		err := ParseFromEnvironment(&config)
-		if err != nil {
-			t.Error(err)
-		}
-		if config.Foo != val {
-			t.Errorf("got: %v, want: %v", config.Foo, val)
-		}
-	})
-
-	t.Run("input has invalid bool", func(t *testing.T) {
-		config := struct{ Foo bool }{}
-		os.Setenv("FOO", "trueish")
-		defer os.Clearenv()
-		err := ParseFromEnvironment(&config)
-		if err == nil {
-			t.Error("expected error, got nil")
-		}
-		if strings.Contains(err.Error(), "failed to farse environment key: Foo to bool") {
-			t.Errorf("error message idd not match expected format: %s", err)
-		}
-	})
-
-	t.Run("input with int field, invalid environment variable", func(t *testing.T) {
+	t.Run("struct input invalid int field", func(t *testing.T) {
 		config := struct{ Foo int }{}
 		val := "abc123"
 		os.Setenv("FOO", val)
 		defer os.Clearenv()
-		err := ParseFromEnvironment(&config)
+		err := LoadFromEnvironment(&config, "")
 		if err == nil {
 			t.Errorf("got: %s, expected: error", err)
 		}
@@ -79,12 +52,39 @@ func Test_ParseFromEnvironment(t *testing.T) {
 		}
 	})
 
-	t.Run("input with string field", func(t *testing.T) {
+	t.Run("struct input has bool", func(t *testing.T) {
+		config := struct{ Foo bool }{}
+		val := true
+		os.Setenv("FOO", strconv.FormatBool(val))
+		defer os.Clearenv()
+		err := LoadFromEnvironment(&config, "")
+		if err != nil {
+			t.Error(err)
+		}
+		if config.Foo != val {
+			t.Errorf("got: %v, want: %v", config.Foo, val)
+		}
+	})
+
+	t.Run("struct input has invalid bool", func(t *testing.T) {
+		config := struct{ Foo bool }{}
+		os.Setenv("FOO", "trueish")
+		defer os.Clearenv()
+		err := LoadFromEnvironment(&config, "")
+		if err == nil {
+			t.Error("expected error, got nil")
+		}
+		if strings.Contains(err.Error(), "failed to farse environment key: Foo to bool") {
+			t.Errorf("error message idd not match expected format: %s", err)
+		}
+	})
+
+	t.Run("struct input with string field", func(t *testing.T) {
 		config := struct{ Foo string }{}
 		val := "bar"
 		os.Setenv("FOO", val)
 		defer os.Clearenv()
-		err := ParseFromEnvironment(&config)
+		err := LoadFromEnvironment(&config, "")
 		if err != nil {
 			t.Error(err)
 		}
@@ -93,11 +93,25 @@ func Test_ParseFromEnvironment(t *testing.T) {
 		}
 	})
 
+	t.Run("basic input with prefix", func(t *testing.T) {
+		var foo string
+		val := "bar"
+		os.Setenv("FOO", val)
+		defer os.Clearenv()
+		err := LoadFromEnvironment(&foo, "FOO")
+		if err != nil {
+			t.Error(err)
+		}
+		if foo != val {
+			t.Errorf("got: %s, want: %s", foo, val)
+		}
+	})
+
 	t.Run("unsupported field type", func(t *testing.T) {
 		config := struct{ Foo chan (string) }{}
 		val := "bar"
 		os.Setenv("FOO", val)
-		err := ParseFromEnvironment(&config)
+		err := LoadFromEnvironment(&config, "")
 		if err == nil {
 			t.Errorf("got: %s, want: error", err)
 		}
@@ -108,7 +122,7 @@ func Test_ParseFromEnvironment(t *testing.T) {
 		val := "baz"
 		os.Setenv("FOO_BAR", val)
 		defer os.Clearenv()
-		err := ParseFromEnvironment(&config)
+		err := LoadFromEnvironment(&config, "")
 		if err != nil {
 			t.Error(err)
 		}
@@ -126,7 +140,7 @@ func Test_ParseFromEnvironment(t *testing.T) {
 		val := "baz"
 		os.Setenv("FOO_BAR", val)
 		defer os.Clearenv()
-		err := ParseFromEnvironment(&config)
+		err := LoadFromEnvironment(&config, "")
 		if err != nil {
 			t.Error(err)
 		}
@@ -146,7 +160,7 @@ func Test_ParseFromEnvironment(t *testing.T) {
 				Bar: d,
 			},
 		}
-		err := ParseFromEnvironment(&config)
+		err := LoadFromEnvironment(&config, "")
 		if err != nil {
 			t.Error(err)
 		}
@@ -166,7 +180,7 @@ func Test_ParseFromEnvironment(t *testing.T) {
 		}
 		os.Setenv("FOO_BAR", val)
 		defer os.Clearenv()
-		err := ParseFromEnvironment(&config)
+		err := LoadFromEnvironment(&config, "")
 		if err == nil {
 			t.Errorf("got: %s, expected: error", err)
 		}
@@ -190,7 +204,7 @@ func Test_ParseFromEnvironment(t *testing.T) {
 		}
 		os.Setenv("FOO_BAR", val)
 		defer os.Clearenv()
-		err := ParseFromEnvironment(&config)
+		err := LoadFromEnvironment(&config, "")
 		if err != nil {
 			t.Error(err)
 		}
@@ -202,6 +216,15 @@ func Test_ParseFromEnvironment(t *testing.T) {
 	})
 }
 
+func Test_MustLoadFromEnvironment(t *testing.T) {
+	// No need to check whether `recover()` is nil. Just turn off the panic.
+	defer func() { _ = recover() }()
+	var foo int
+	os.Setenv("FOO", "bar")
+	defer os.Clearenv()
+	MustLoadFromEnvironment(&foo, "FOO")
+	t.Errorf("did not panic")
+}
 func Test_camelToUpperSnakeCase(t *testing.T) {
 	type args struct {
 		s      string

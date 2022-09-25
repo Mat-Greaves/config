@@ -1,3 +1,4 @@
+// Package config implements utility routines for populating and managing configuration.
 package config
 
 import (
@@ -9,25 +10,36 @@ import (
 	"unicode"
 )
 
-// ParseFromEnvironment walks a *struct and populates its values from environment variables
-// matching its keys converted to Upper Snake Case. Nested struct values are treated the same as
-// repated words. That is foo.bar will look for environment variable FOO_BAR as will FooBar. Slices
-// look like nested structs, you cannot set values for specific elements.
-// Fields that do not find matching environment variables are preserved and not validated in any way.
-// Unexported fields are not parsed and struct keys are expected to be in camel case.
-// FIXME: is there a better form than any/interface{} to only allow pointers so structs here?
-func ParseFromEnvironment[T any, PtrT *T](pt PtrT) error {
+// ParseFromEnvironment walks a input looking for corresponding environment variables, which if found
+// will update the structures value. Only exported fields of structured inputs are considered.
+
+// Environment variable keys are determined by converting the key reference to upper snake case,
+// splitting on any words or child references. eg.
+//
+//	FooBar.Baz -> FOO_BAR_BAZ
+//
+// Basic data types can also be used by populating the prefix argument to match the exact corresponding
+// environment variable key name.
+func LoadFromEnvironment[T any, PtrT *T](pt PtrT, prefix string) error {
 	ptr := reflect.ValueOf(pt)
-	err := parseRecursive(reflect.Indirect(ptr), "")
+	err := loadRecursive(reflect.Indirect(ptr), prefix)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-// parseRecursive recursively parses an aritrary structure building up an expected environment
-// variable path to find corresponding configuration values at.
-func parseRecursive(val reflect.Value, environmentKey string) error {
+// MustLoadFromEnvironment behaves the same as [LoadFromEnvironment] but will panic instead of
+// returning any errors.
+func MustLoadFromEnvironment[T any, PtrT *T](pt PtrT, prefix string) {
+	ptr := reflect.ValueOf(pt)
+	err := loadRecursive(reflect.Indirect(ptr), prefix)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func loadRecursive(val reflect.Value, environmentKey string) error {
 	if val.Kind() == reflect.Struct {
 		for i := 0; i < val.NumField(); i++ {
 			field := val.Field(i)
@@ -36,7 +48,7 @@ func parseRecursive(val reflect.Value, environmentKey string) error {
 			}
 
 			fieldName := val.Type().Field(i).Name
-			err := parseRecursive(field, camelToUpperSnakeCase(fieldName, environmentKey))
+			err := loadRecursive(field, camelToUpperSnakeCase(fieldName, environmentKey))
 			if err != nil {
 				return err
 			}
@@ -47,7 +59,7 @@ func parseRecursive(val reflect.Value, environmentKey string) error {
 	// config differently per index.
 	if val.Kind() == reflect.Array || val.Kind() == reflect.Slice {
 		for j := 0; j < val.Len(); j++ {
-			err := parseRecursive(val.Index(j), environmentKey)
+			err := loadRecursive(val.Index(j), environmentKey)
 			if err != nil {
 				return err
 			}
